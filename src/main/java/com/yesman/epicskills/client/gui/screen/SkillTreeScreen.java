@@ -700,17 +700,43 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 		public class NodeButton extends AbstractButton {
 			private static final ResourceLocation LOCKER_ICON = EpicSkills.identifier("textures/gui/widget/locker.png");
 
+			/**
+			 * Category names that already triggered the missing-texture warning this session.
+			 * Addon mods can register Epic Fight skills in categories this mod has no
+			 * {@link CategorySlotTexture} (or node frame art) for, and a few stock Epic Fight
+			 * categories lack art too. Before the passive fallback, such nodes crashed the
+			 * skill tree screen with a NullPointerException in renderWidget (upstream
+			 * issues #33/#35).
+			 */
+			private static final Set<String> WARNED_UNTEXTURED_CATEGORIES = new HashSet<> ();
+
 			private final SkillTreeProgression.TopDownTreeNode treeNode;
 			private final List<Pair<NodeButton, List<Vec2i>>> parents = new ArrayList<> ();
 			private final CategorySlotTexture categoryTexture;
+			/** Folder name for the node frame texture; {@code "passive"} when falling back. */
+			private final String categoryFolderName;
 			private final boolean importedNode;
 			
 			public NodeButton(SkillTreeProgression.TopDownTreeNode treeNode) {
 				super(treeNode.nodeInfo().positionInScreen().x, treeNode.nodeInfo().positionInScreen().y, 32, 32, Component.empty());
 				
 				this.treeNode = treeNode;
-				this.categoryTexture = CategorySlotTexture.ENUM_MANAGER.get(treeNode.nodeInfo().skill().getCategory().toString());
 				this.importedNode = treeNode.nodeInfo().importFrom() != null;
+				
+				String categoryName = treeNode.nodeInfo().skill().getCategory().toString();
+				CategorySlotTexture categoryTexture = CategorySlotTexture.ENUM_MANAGER.get(categoryName);
+				
+				if (categoryTexture == null) {
+					if (WARNED_UNTEXTURED_CATEGORIES.add(categoryName)) {
+						EpicSkills.LOGGER.warn("Skill tree node for category '{}' has no registered CategorySlotTexture; falling back to the default (passive) frame. The category is either a stock Epic Fight category without skill-tree art, or was added by an addon mod without skill-tree texture support.", categoryName);
+					}
+					
+					this.categoryTexture = CategorySlotTextures.PASSIVE;
+					this.categoryFolderName = "passive";
+				} else {
+					this.categoryTexture = categoryTexture;
+					this.categoryFolderName = ParseUtil.toLowerCase(categoryName);
+				}
 			}
 			
 			public Skill getSkill() {
@@ -759,7 +785,7 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 				ResourceLocation nodeTexture =
 						EpicSkills.identifier(String.format(
 								"textures/gui/widget/node/%s/%s.png",
-								ParseUtil.toLowerCase(this.treeNode.nodeInfo().skill().getCategory().toString()),
+								this.categoryFolderName,
 								ParseUtil.toLowerCase(buttonTexture.name())
 						));
 				
