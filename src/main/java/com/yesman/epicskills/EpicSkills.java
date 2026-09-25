@@ -2,13 +2,13 @@ package com.yesman.epicskills;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
-import com.yesman.epicskills.client.gui.screen.CategorySlotTexture;
-import com.yesman.epicskills.client.gui.screen.SkillTreeScreen;
+import com.yesman.epicskills.client.gui.NodeWidgetResolver;
+import com.yesman.epicskills.client.gui.TreeChromeResolver;
+import com.yesman.epicskills.config.EpicSkillsClientConfig;
 import com.yesman.epicskills.registry.entry.EpicSkillsAttachmentTypes;
 import com.yesman.epicskills.registry.entry.EpicSkillsGlobalLootModifer;
 import com.yesman.epicskills.registry.entry.EpicSkillsItems;
@@ -24,13 +24,14 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.registries.DataPackRegistryEvent;
 import yesman.epicfight.api.event.EpicFightEventHooks;
-import yesman.epicfight.main.EpicFightSharedConstants;
 import yesman.epicfight.registry.entries.EpicFightCreativeTabs;
 
 /**
@@ -68,11 +69,9 @@ public class EpicSkills {
         EpicSkillsAttachmentTypes.REGISTRY.register(modEventBus);
         EpicSkillsGlobalLootModifer.GLOBAL_LOOT_LOOT_MODIFIERS.register(modEventBus);
 
-        NeoForge.EVENT_BUS.addListener(this::epicskills$registerCommands);
+        modContainer.registerConfig(ModConfig.Type.CLIENT, EpicSkillsClientConfig.SPEC);
 
-        if (EpicFightSharedConstants.isPhysicalClient()) {
-        	CategorySlotTexture.ENUM_MANAGER.registerEnumCls(EpicSkills.MODID, SkillTreeScreen.TreePage.NodeButton.CategorySlotTextures.class);
-        }
+        NeoForge.EVENT_BUS.addListener(this::epicskills$registerCommands);
     }
 	
 	public void epicskills$newDataPackRegistryEvent(DataPackRegistryEvent.NewRegistry event) {
@@ -122,8 +121,9 @@ public class EpicSkills {
 	@EventBusSubscriber(modid = EpicSkills.MODID, value = Dist.CLIENT)
     public static class ClientModEvents {
         @SubscribeEvent
-        public static void epicskills$fmlClientSetup(FMLClientSetupEvent event) {
-        	event.enqueueWork(CategorySlotTexture.ENUM_MANAGER::loadEnum);
+        public static void epicskills$registerClientReloadListeners(RegisterClientReloadListenersEvent event) {
+            event.registerReloadListener(NodeWidgetResolver.INSTANCE);
+            event.registerReloadListener(TreeChromeResolver.INSTANCE);
         }
 	}
 

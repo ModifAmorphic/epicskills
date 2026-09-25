@@ -5,6 +5,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import com.mojang.datafixers.util.Pair;
 import com.yesman.epicskills.EpicSkills;
+import com.yesman.epicskills.client.gui.NodeWidgetResolver;
+import com.yesman.epicskills.client.gui.NodeWidgetResolver.CategoryWidgets;
+import com.yesman.epicskills.client.gui.TreeChromeResolver;
 import com.yesman.epicskills.client.gui.screen.SkillTreeScreen.TreePage.NodeButton;
 import com.yesman.epicskills.client.gui.widget.HoverSoundPlayer;
 import com.yesman.epicskills.neoforge.attachment.AbilityPoints;
@@ -17,7 +20,6 @@ import com.yesman.epicskills.network.server.ServerBoundConvertAbilityPointReques
 import com.yesman.epicskills.registry.entry.EpicSkillsAttachmentTypes;
 import com.yesman.epicskills.registry.entry.EpicSkillsSounds;
 import com.yesman.epicskills.skilltree.SkillTree;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.*;
@@ -60,13 +62,9 @@ import java.util.function.Function;
 
 @OnlyIn(Dist.CLIENT)
 public class SkillTreeScreen extends Screen implements BackgroundRenderableScreen {
-	public static final Function<Holder.Reference<SkillTree>, ResourceLocation> SKILL_TREE_BACKGROUND_TEXTURES = Util.memoize(skillTree -> {
-		return ResourceLocation.fromNamespaceAndPath(skillTree.key().location().getNamespace(), String.format("textures/gui/skill_tree/background/%s.png", skillTree.key().location().getPath()));
-	});
-	
-	public static final Function<Holder.Reference<SkillTree>, ResourceLocation> SKILL_TREE_ICON_TEXTURES = Util.memoize(skillTree -> {
-		return ResourceLocation.fromNamespaceAndPath(skillTree.key().location().getNamespace(), String.format("textures/gui/skill_tree/icon/%s.png", skillTree.key().location().getPath()));
-	});
+	public static final Function<Holder.Reference<SkillTree>, ResourceLocation> SKILL_TREE_BACKGROUND_TEXTURES = TreeChromeResolver.INSTANCE::background;
+
+	public static final Function<Holder.Reference<SkillTree>, ResourceLocation> SKILL_TREE_ICON_TEXTURES = TreeChromeResolver.INSTANCE::icon;
 	
 	private final Player player;
 	private final PlayerSkills playerSkills;
@@ -702,15 +700,15 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 
 			private final SkillTreeProgression.TopDownTreeNode treeNode;
 			private final List<Pair<NodeButton, List<Vec2i>>> parents = new ArrayList<> ();
-			private final CategorySlotTexture categoryTexture;
+			private final CategoryWidgets categoryWidgets;
 			private final boolean importedNode;
-			
+
 			public NodeButton(SkillTreeProgression.TopDownTreeNode treeNode) {
 				super(treeNode.nodeInfo().positionInScreen().x, treeNode.nodeInfo().positionInScreen().y, 32, 32, Component.empty());
-				
+
 				this.treeNode = treeNode;
-				this.categoryTexture = CategorySlotTexture.ENUM_MANAGER.get(treeNode.nodeInfo().skill().getCategory().toString());
 				this.importedNode = treeNode.nodeInfo().importFrom() != null;
+				this.categoryWidgets = NodeWidgetResolver.INSTANCE.resolve(treeNode.nodeInfo().skill().getCategory().toString());
 			}
 			
 			public Skill getSkill() {
@@ -756,13 +754,8 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 					buttonTexture = ButtonStateTexture.EQUIPPED;
 				}
 
-				ResourceLocation nodeTexture =
-						EpicSkills.identifier(String.format(
-								"textures/gui/widget/node/%s/%s.png",
-								ParseUtil.toLowerCase(this.treeNode.nodeInfo().skill().getCategory().toString()),
-								ParseUtil.toLowerCase(buttonTexture.name())
-						));
-				
+				NodeWidgetResolver.NodeWidget widget = this.categoryWidgets.byState(ParseUtil.toLowerCase(buttonTexture.name()));
+
 				if (this.importedNode) {
 					RenderSystem.enableBlend();
 					RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 0.4F);
@@ -772,17 +765,15 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 				int heightHalf = this.height / 2;
 				
 				guiGraphics.blit(
-					nodeTexture,
-					this.getX() - widthHalf - this.categoryTexture.offsetX(),
-					this.getY() - heightHalf - this.categoryTexture.offsetY(),
-					this.categoryTexture.texWidth(),
-					this.categoryTexture.texHeight(),
+					widget.texture(),
+					this.getX() - widthHalf - widget.offsetX(),
+					this.getY() - heightHalf - widget.offsetY(),
 					0.0F,
 					0.0F,
-					this.categoryTexture.texWidth(),
-					this.categoryTexture.texHeight(),
-					this.categoryTexture.texWidth(),
-					this.categoryTexture.texHeight()
+					widget.width(),
+					widget.height(),
+					widget.width(),
+					widget.height()
 				);
 				
 				guiGraphics.innerBlit(
@@ -945,60 +936,12 @@ public class SkillTreeScreen extends Screen implements BackgroundRenderableScree
 				private int g;
 				private int b;
 				
-				private ButtonStateTexture(int r, int g, int b) {
-					this.r = r;
-					this.g = g;
-					this.b = b;
-				}
-			}
-			
-			@OnlyIn(Dist.CLIENT)
-			public enum CategorySlotTextures implements CategorySlotTexture {
-				DODGE(3, 6, 38, 44),
-				GUARD(3, 7, 38, 46),
-				IDENTITY(6, 6, 44, 44),
-				PASSIVE(3, 3, 38, 38),
-				MOVER(5, 5, 42, 42);
-				
-				private int offsetX;
-				private int offsetY;
-				private int texWidth;
-				private int texHeight;
-				private int universalOrder;
-				
-				private CategorySlotTextures(int offsetX, int offsetY, int texWidth, int texHeight) {
-					this.offsetX = offsetX;
-					this.offsetY = offsetY;
-					this.texWidth = texWidth;
-					this.texHeight = texHeight;
-					this.universalOrder = CategorySlotTexture.ENUM_MANAGER.assign(this);
-				}
-
-				@Override
-				public int offsetX() {
-					return this.offsetX;
-				}
-
-				@Override
-				public int offsetY() {
-					return this.offsetY;
-				}
-
-				@Override
-				public int texWidth() {
-					return this.texWidth;
-				}
-
-				@Override
-				public int texHeight() {
-					return this.texHeight;
-				}
-				
-				@Override
-				public int universalOrdinal() {
-					return this.universalOrder;
-				}
+			private ButtonStateTexture(int r, int g, int b) {
+				this.r = r;
+				this.g = g;
+				this.b = b;
 			}
 		}
 	}
+}
 }
